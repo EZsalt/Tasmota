@@ -235,7 +235,7 @@ void ZbApplyMultiplier(double &val_d, int8_t multiplier) {
 // Write Tuya-Moes attribute
 //
 bool ZbTuyaWrite(SBuffer & buf, const Z_attribute & attr) {
-  double val_d = attr.getFloat();
+  double val_d = attr.getOptimisticDouble();
   const char * val_str = attr.getStr();
 
   if (attr.key_is_str) { return false; }    // couldn't find attr if so skip
@@ -294,7 +294,7 @@ bool ZbTuyaWrite(SBuffer & buf, const Z_attribute & attr) {
 // Send Attribute Write, apply mutlipliers before
 //
 bool ZbAppendWriteBuf(SBuffer & buf, const Z_attribute & attr, bool prepend_status_ok) {
-  double val_d = attr.getFloat();
+  double val_d = attr.getOptimisticDouble();
   const char * val_str = attr.getStr();
 
   if (attr.key_is_str) { return false; }    // couldn't find attr if so skip
@@ -622,7 +622,7 @@ void ZbSendRead(JsonParserToken val_attr, ZCLMessage & zcl) {
 
       bool found = false;
       // scan attributes to find by name, and retrieve type
-      for (uint32_t i = 0; i < ARRAY_SIZE(Z_PostProcess); i++) {
+      for (uint32_t i = 0; i < nitems(Z_PostProcess); i++) {
         const Z_AttributeConverter *converter = &Z_PostProcess[i];
         uint16_t local_attr_id = pgm_read_word(&converter->attribute);
         uint16_t local_cluster_id = CxToCluster(pgm_read_byte(&converter->cluster_short));
@@ -1291,12 +1291,6 @@ void CmndZbSave(void) {
     case 2:       // save only data
       hibernateAllData();
       break;
-    case -1:      // dump configuration
-      loadZigbeeDevices(true);    // dump only
-      break;
-    case -2:
-      hydrateDevicesDataFromEEPROM();
-      break;
 #ifdef Z_EEPROM_DEBUG
     case -10:
       { // reinit EEPROM
@@ -1463,7 +1457,7 @@ void CmndZbPermitJoin(void) {
     }
     if (0 == zigbee.permit_end_time) { zigbee.permit_end_time = 1; }    // avoid very rare case where timer collides with timestamp equals to zero
   }
-  
+
   ResponseCmndDone();
 }
 
@@ -1569,7 +1563,7 @@ void CmndZbData(void) {
   if (strlen(XdrvMailbox.data) == 0) {
     // if empty, log values for all devices
     for (const auto & device : zigbee_devices.getDevices()) {
-      hibernateDeviceData(device, true);    // simple log, no mqtt
+      hibernateDeviceData(device);
     }
   } else {
     // check if parameters contain a comma ','
@@ -1588,7 +1582,7 @@ void CmndZbData(void) {
       // non-JSON, export current data
       // ZbData 0x1234
       // ZbData Device_Name
-      hibernateDeviceData(device, true);    // mqtt
+      hibernateDeviceData(device);
     }
   }
 
@@ -2183,9 +2177,7 @@ bool Xdrv23(uint8_t function)
         result = DecodeCommand(kZbCommands, ZigbeeCommand, kZbSynonyms);
         break;
       case FUNC_SAVE_BEFORE_RESTART:
-#ifdef USE_ZIGBEE_EZSP
         hibernateAllData();
-#endif  // USE_ZIGBEE_EZSP
         restoreDumpAllDevices();
         break;
     }
